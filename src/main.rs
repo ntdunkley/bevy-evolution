@@ -132,7 +132,7 @@ fn choose_target_for_fox(
 }
 
 fn get_next_target_for_fox(animal_list: &Vec<Entity>) -> Option<Entity> {
-    if animal_list.len() < 1 {
+    if animal_list.is_empty() {
         None
     } else {
         animal_list
