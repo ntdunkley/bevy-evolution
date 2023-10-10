@@ -12,28 +12,29 @@ fn main() {
         .add_systems(
             Update,
             (
-                update_animal_target_pos,
-                choose_target_for_fox,
-                update_fox_direction,
-                move_animals,
-                move_fox,
+                update_movable_target_pos,
+                choose_target_for_predator,
+                update_predator_direction,
+                move_movables,
             ),
         )
         .run();
 }
 
 #[derive(Component)]
-struct Animal {
-    target_pos: Vec3,
+struct Movable {
     direction: Vec3,
     speed: f32,
 }
 
 #[derive(Component)]
-struct Fox {
+struct Wanderer {
+    target_pos: Vec3,
+}
+
+#[derive(Component)]
+struct Predator {
     target: Option<Entity>,
-    direction: Option<Vec3>,
-    speed: f32,
 }
 
 fn startup(mut commands: Commands) {
@@ -54,11 +55,11 @@ fn startup(mut commands: Commands) {
                 },
                 ..default()
             })
-            .insert(Animal {
-                target_pos,
+            .insert(Movable {
                 direction: (target_pos - spawn_pos).normalize(),
                 speed: 100.0,
-            });
+            })
+            .insert(Wanderer { target_pos });
     }
     commands
         .spawn(SpriteBundle {
@@ -69,74 +70,65 @@ fn startup(mut commands: Commands) {
             },
             ..default()
         })
-        .insert(Fox {
-            target: None,
-            direction: None,
+        .insert(Predator { target: None })
+        .insert(Movable {
+            direction: Vec3::default(),
             speed: 125.0,
         });
 }
 
-fn update_animal_target_pos(mut query: Query<(&mut Animal, &Transform)>) {
-    for (mut animal, animal_pos) in query.iter_mut() {
-        if animal.target_pos.distance(animal_pos.translation) < 5.0 {
+fn update_movable_target_pos(mut query: Query<(&mut Movable, &mut Wanderer, &Transform)>) {
+    for (mut movable, mut wanderer, movable_pos) in query.iter_mut() {
+        if wanderer.target_pos.distance(movable_pos.translation) < 5.0 {
             let target_pos = get_random_pos_within(WIDTH, HEIGHT);
-            animal.target_pos = target_pos;
-            animal.direction = (target_pos - animal_pos.translation).normalize();
+            wanderer.target_pos = target_pos;
+            movable.direction = (target_pos - movable_pos.translation).normalize();
         }
     }
 }
 
-fn move_animals(mut query: Query<(&Animal, &mut Transform)>, time: Res<Time>) {
-    for (animal, mut animal_pos) in query.iter_mut() {
-        animal_pos.translation += animal.direction * animal.speed * time.delta_seconds();
+fn move_movables(mut query: Query<(&Movable, &mut Transform)>, time: Res<Time>) {
+    for (movable, mut movable_pos) in query.iter_mut() {
+        movable_pos.translation += movable.direction * movable.speed * time.delta_seconds();
     }
 }
 
-fn move_fox(mut query: Query<(&Fox, &mut Transform)>, time: Res<Time>) {
-    for (fox, mut fox_pos) in query.iter_mut() {
-        if let Some(fox_dir) = fox.direction {
-            fox_pos.translation += fox_dir * fox.speed * time.delta_seconds();
-        }
-    }
-}
-
-fn update_fox_direction(
+fn update_predator_direction(
     mut commands: Commands,
-    animal_query: Query<&Transform, With<Animal>>,
-    mut fox_query: Query<(&mut Fox, &Transform), Without<Animal>>,
+    movable_query: Query<&Transform, (With<Movable>, Without<Predator>)>,
+    mut predator_query: Query<(&mut Predator, &mut Movable, &Transform), With<Predator>>,
 ) {
-    let (mut fox, fox_pos) = fox_query.single_mut();
-    if let Some(animal_entity) = fox.target {
-        if let Ok(target_pos) = animal_query.get(animal_entity) {
-            let vector = target_pos.translation - fox_pos.translation;
+    let (mut predator, mut movable, predator_pos) = predator_query.single_mut();
+    if let Some(movable_entity) = predator.target {
+        if let Ok(target_pos) = movable_query.get(movable_entity) {
+            let vector = target_pos.translation - predator_pos.translation;
             if vector.length() < 25.0 {
-                commands.entity(animal_entity).despawn();
-                fox.target = None;
-                fox.direction = None;
+                commands.entity(movable_entity).despawn();
+                predator.target = None;
             } else {
-                fox.direction = Some(vector.normalize());
+                movable.direction = vector.normalize();
             }
         }
     }
 }
 
-fn choose_target_for_fox(
-    animal_query: Query<Entity, With<Animal>>,
-    mut fox_query: Query<&mut Fox, Without<Animal>>,
+fn choose_target_for_predator(
+    movable_query: Query<Entity, Without<Predator>>,
+    mut predator_query: Query<&mut Predator>,
 ) {
-    let mut fox = fox_query.single_mut();
-    if fox.target.is_none() {
-        let animal_list = animal_query.iter().collect::<Vec<Entity>>();
-        fox.target = get_next_target_for_fox(&animal_list);
+    let mut predator = predator_query.single_mut();
+    if predator.target.is_none() {
+        let movable_list = movable_query.iter().collect::<Vec<Entity>>();
+        predator.target = get_next_target_for_predator(&movable_list);
     }
 }
 
-fn get_next_target_for_fox(animal_list: &Vec<Entity>) -> Option<Entity> {
-    if animal_list.is_empty() {
+fn get_next_target_for_predator(movable_list: &Vec<Entity>) -> Option<Entity> {
+    if movable_list.is_empty() {
         None
     } else {
-        animal_list
-            .get(fastrand::usize(0..animal_list.len()))
+        movable_list
+            .get(fastrand::usize(0..movable_list.len()))
             .cloned()
     }
 }
