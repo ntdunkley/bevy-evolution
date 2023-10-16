@@ -1,6 +1,7 @@
 use bevy::prelude::Commands;
 use bevy::prelude::*;
 use bevy::DefaultPlugins;
+use std::time::Duration;
 
 const WIDTH: f32 = 600.0;
 const HEIGHT: f32 = 300.0;
@@ -16,6 +17,7 @@ fn main() {
                 update_predators,
                 choose_target_for_predator.before(update_predators),
                 move_movables,
+                spawn_wanderers,
             ),
         )
         .run();
@@ -30,6 +32,7 @@ struct Movable {
 #[derive(Component)]
 struct Wanderer {
     target_pos: Vec3,
+    offspring_timer: Timer,
 }
 
 #[derive(Component)]
@@ -39,27 +42,11 @@ struct Predator {
 
 fn startup(mut commands: Commands) {
     commands.spawn(Camera2dBundle::default());
-    for _ in 0..1 {
-        let target_pos = get_random_pos_within(WIDTH, HEIGHT);
+    for _ in 0..15 {
         let spawn_pos = get_random_pos_within(WIDTH, HEIGHT);
-        commands
-            .spawn(SpriteBundle {
-                sprite: Sprite {
-                    color: Color::rgb(0.25, 0.25, 0.75),
-                    custom_size: Some(Vec2::new(25.0, 25.0)),
-                    ..default()
-                },
-                transform: Transform {
-                    translation: spawn_pos,
-                    ..default()
-                },
-                ..default()
-            })
-            .insert(Movable {
-                direction: (target_pos - spawn_pos).normalize(),
-                speed: 100.0,
-            })
-            .insert(Wanderer { target_pos });
+        let target_pos = get_random_pos_within(WIDTH, HEIGHT);
+        let offspring_timer_count = fastrand::u64(10..=20);
+        spawn_wanderer(&mut commands, spawn_pos, target_pos, offspring_timer_count);
     }
     commands
         .spawn(SpriteBundle {
@@ -73,8 +60,24 @@ fn startup(mut commands: Commands) {
         .insert(Predator { target: None })
         .insert(Movable {
             direction: Vec3::default(),
-            speed: 400.0,
+            speed: 150.0,
         });
+}
+
+fn spawn_wanderers(
+    mut commands: Commands,
+    mut query: Query<(&mut Wanderer, &Transform)>,
+    time: Res<Time>,
+) {
+    for (mut wanderer, wanderer_pos) in query.iter_mut() {
+        wanderer.offspring_timer.tick(time.delta());
+        if wanderer.offspring_timer.just_finished() {
+            let spawn_pos = wanderer_pos.translation + Vec3::new(0.5, 0.0, 0.0);
+            let target_pos = get_random_pos_within(WIDTH, HEIGHT);
+            let offspring_timer_count = fastrand::u64(10..=20);
+            spawn_wanderer(&mut commands, spawn_pos, target_pos, offspring_timer_count);
+        }
+    }
 }
 
 fn update_wanderers(mut query: Query<(&mut Movable, &mut Wanderer, &Transform)>) {
@@ -145,4 +148,36 @@ fn get_random_pos_within(width: f32, height: f32) -> Vec3 {
         (fastrand::f32() * (height * 2.0)) - height,
         0.0,
     )
+}
+
+fn spawn_wanderer(
+    commands: &mut Commands,
+    spawn_pos: Vec3,
+    target_pos: Vec3,
+    offspring_timer_count: u64,
+) {
+    commands
+        .spawn(SpriteBundle {
+            sprite: Sprite {
+                color: Color::rgb(0.25, 0.50, 0.75),
+                custom_size: Some(Vec2::new(25.0, 25.0)),
+                ..default()
+            },
+            transform: Transform {
+                translation: spawn_pos,
+                ..default()
+            },
+            ..default()
+        })
+        .insert(Movable {
+            direction: (target_pos - spawn_pos).normalize(),
+            speed: 100.0,
+        })
+        .insert(Wanderer {
+            target_pos,
+            offspring_timer: Timer::new(
+                Duration::from_secs(offspring_timer_count),
+                TimerMode::Once,
+            ),
+        });
 }
