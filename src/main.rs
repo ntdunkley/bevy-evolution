@@ -5,6 +5,8 @@ use std::time::Duration;
 
 const WIDTH: f32 = 600.0;
 const HEIGHT: f32 = 300.0;
+const PREDATOR_SPEED: f32 = 175.0;
+const WANDERER_SCARE_DISTANCE: f32 = 100.0;
 
 fn main() {
     App::new()
@@ -45,7 +47,7 @@ fn startup(mut commands: Commands) {
     for _ in 0..15 {
         let spawn_pos = get_random_pos_within(WIDTH, HEIGHT);
         let target_pos = get_random_pos_within(WIDTH, HEIGHT);
-        let offspring_timer_count = fastrand::u64(10..=20);
+        let offspring_timer_count = fastrand::u64(20..=30);
         spawn_wanderer(&mut commands, spawn_pos, target_pos, offspring_timer_count);
     }
     commands
@@ -60,7 +62,7 @@ fn startup(mut commands: Commands) {
         .insert(Predator { target: None })
         .insert(Movable {
             direction: Vec3::default(),
-            speed: 150.0,
+            speed: PREDATOR_SPEED,
         });
 }
 
@@ -74,18 +76,28 @@ fn spawn_wanderers(
         if wanderer.offspring_timer.just_finished() {
             let spawn_pos = wanderer_pos.translation + Vec3::new(0.5, 0.0, 0.0);
             let target_pos = get_random_pos_within(WIDTH, HEIGHT);
-            let offspring_timer_count = fastrand::u64(10..=20);
+            let offspring_timer_count = fastrand::u64(20..=30);
             spawn_wanderer(&mut commands, spawn_pos, target_pos, offspring_timer_count);
         }
     }
 }
 
-fn update_wanderers(mut query: Query<(&mut Movable, &mut Wanderer, &Transform)>) {
-    for (mut movable, mut wanderer, movable_pos) in query.iter_mut() {
-        if wanderer.target_pos.distance(movable_pos.translation) < 5.0 {
-            let target_pos = get_random_pos_within(WIDTH, HEIGHT);
-            wanderer.target_pos = target_pos;
-            movable.direction = (target_pos - movable_pos.translation).normalize();
+fn update_wanderers(
+    mut query: Query<(&mut Movable, &mut Wanderer, &Transform)>,
+    predator_query: Query<&Transform, With<Predator>>,
+) {
+    let predator_pos = predator_query.single();
+    for (mut movable, mut wanderer, wanderer_pos) in query.iter_mut() {
+        let vector_to_target = wanderer.target_pos - wanderer_pos.translation;
+        if vector_to_target.length() < 5.0 {
+            wanderer.target_pos = get_random_pos_within(WIDTH, HEIGHT);
+        }
+        // Move away from predator if too close
+        let vector_to_predator = predator_pos.translation - wanderer_pos.translation;
+        if vector_to_predator.length() < WANDERER_SCARE_DISTANCE {
+            movable.direction = -vector_to_predator.normalize();
+        } else {
+            movable.direction = vector_to_target.normalize();
         }
     }
 }
@@ -177,7 +189,7 @@ fn spawn_wanderer(
             target_pos,
             offspring_timer: Timer::new(
                 Duration::from_secs(offspring_timer_count),
-                TimerMode::Once,
+                TimerMode::Repeating,
             ),
         });
 }
