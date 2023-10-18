@@ -40,20 +40,7 @@ fn startup(mut commands: Commands) {
         let offspring_timer_count = wanderer::generate_offspring_timer_count();
         wanderer::spawn_wanderer(&mut commands, spawn_pos, target_pos, offspring_timer_count);
     }
-    commands
-        .spawn(SpriteBundle {
-            sprite: Sprite {
-                color: Color::rgb(0.75, 0.25, 0.25),
-                custom_size: Some(Vec2::new(25.0, 25.0)),
-                ..default()
-            },
-            ..default()
-        })
-        .insert(Predator { target: None })
-        .insert(Movable {
-            direction: Vec3::default(),
-            speed: predator::PREDATOR_SPEED,
-        });
+    predator::spawn_predator(&mut commands);
 }
 
 fn spawn_wanderers(
