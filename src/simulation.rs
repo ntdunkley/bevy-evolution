@@ -101,7 +101,7 @@ fn move_movables(mut query: Query<(&Movable, &mut Transform)>, time: Res<Time>) 
 
 fn update_predators(
     mut commands: Commands,
-    movable_query: Query<(&Wanderer, &Transform), (With<Movable>, Without<Predator>)>,
+    movable_query: Query<(&Wanderer, &Transform), Without<Predator>>,
     mut predator_query: Query<(&mut Predator, &mut Movable, &Transform)>,
 ) {
     let (mut predator, mut movable, predator_pos) = predator_query.single_mut();
@@ -109,6 +109,7 @@ fn update_predators(
         if let Ok((wanderer, target_pos)) = movable_query.get(movable_entity) {
             if wanderer.colour == predator::COLOUR_PREDATOR_IGNORES {
                 predator.target = None;
+                movable.direction = Vec3::default();
             } else {
                 let vector_to_target = target_pos.translation - predator_pos.translation;
                 if vector_to_target.length() < 25.0 {
@@ -146,9 +147,9 @@ fn boost_predator_speed(
     keys: Res<Input<KeyCode>>,
 ) {
     let mut predator = predator_query.single_mut();
-    if keys.pressed(KeyCode::Space) {
+    if keys.just_pressed(KeyCode::Space) {
         predator.speed = predator::PREDATOR_SPEED * predator::PREDATOR_BOOST_MODIFIER;
-    } else {
+    } else if keys.just_released(KeyCode::Space) {
         predator.speed = predator::PREDATOR_SPEED
     }
 }
