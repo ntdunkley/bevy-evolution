@@ -4,6 +4,8 @@ use bevy::prelude::{
 };
 
 pub const PREDATOR_SPEED: f32 = 300.0;
+pub const PREDATOR_BOOST_MODIFIER: f32 = 5.0;
+pub const COLOUR_PREDATOR_IGNORES: Color = Color::TOMATO;
 
 #[derive(Component)]
 pub struct Predator {

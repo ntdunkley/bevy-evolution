@@ -21,6 +21,7 @@ impl Plugin for SimulationPlugin {
                 choose_target_for_predator.before(update_predators),
                 move_movables,
                 spawn_wanderers,
+                boost_predator_speed,
             ),
         );
     }
@@ -38,7 +39,13 @@ fn startup(mut commands: Commands) {
         let spawn_pos = get_random_pos_within(WIDTH, HEIGHT);
         let target_pos = get_random_pos_within(WIDTH, HEIGHT);
         let offspring_timer_count = wanderer::generate_offspring_timer_count();
-        wanderer::spawn_wanderer(&mut commands, spawn_pos, target_pos, offspring_timer_count);
+        wanderer::spawn_wanderer(
+            &mut commands,
+            spawn_pos,
+            target_pos,
+            offspring_timer_count,
+            wanderer::DEFAULT_COLOUR,
+        );
     }
     predator::spawn_predator(&mut commands);
 }
@@ -54,7 +61,14 @@ fn spawn_wanderers(
             let spawn_pos = wanderer_pos.translation + Vec3::new(0.5, 0.0, 0.0);
             let target_pos = get_random_pos_within(WIDTH, HEIGHT);
             let offspring_timer_count = wanderer::generate_offspring_timer_count();
-            wanderer::spawn_wanderer(&mut commands, spawn_pos, target_pos, offspring_timer_count);
+            let colour = wanderer::get_colour_for_wanderer(wanderer.colour);
+            wanderer::spawn_wanderer(
+                &mut commands,
+                spawn_pos,
+                target_pos,
+                offspring_timer_count,
+                colour,
+            );
         }
     }
 }
@@ -87,20 +101,24 @@ fn move_movables(mut query: Query<(&Movable, &mut Transform)>, time: Res<Time>) 
 
 fn update_predators(
     mut commands: Commands,
-    movable_query: Query<&Transform, (With<Movable>, Without<Predator>)>,
+    movable_query: Query<(&Wanderer, &Transform), (With<Movable>, Without<Predator>)>,
     mut predator_query: Query<(&mut Predator, &mut Movable, &Transform)>,
 ) {
     let (mut predator, mut movable, predator_pos) = predator_query.single_mut();
     if let Some(movable_entity) = predator.target {
-        if let Ok(target_pos) = movable_query.get(movable_entity) {
-            let vector_to_target = target_pos.translation - predator_pos.translation;
-            if vector_to_target.length() < 25.0 {
-                let mut movable_entity = commands.entity(movable_entity);
-                debug!("Eaten entity {:?}", movable_entity.id());
-                movable_entity.despawn();
+        if let Ok((wanderer, target_pos)) = movable_query.get(movable_entity) {
+            if wanderer.colour == predator::COLOUR_PREDATOR_IGNORES {
                 predator.target = None;
             } else {
-                movable.direction = vector_to_target.normalize();
+                let vector_to_target = target_pos.translation - predator_pos.translation;
+                if vector_to_target.length() < 25.0 {
+                    let mut movable_entity = commands.entity(movable_entity);
+                    debug!("Eaten entity {:?}", movable_entity.id());
+                    movable_entity.despawn();
+                    predator.target = None;
+                } else {
+                    movable.direction = vector_to_target.normalize();
+                }
             }
         }
     } else {
@@ -120,6 +138,18 @@ fn choose_target_for_predator(
             wanderers.len()
         );
         predator.target = select_from_list_at_random(&wanderers);
+    }
+}
+
+fn boost_predator_speed(
+    mut predator_query: Query<&mut Movable, With<Predator>>,
+    keys: Res<Input<KeyCode>>,
+) {
+    let mut predator = predator_query.single_mut();
+    if keys.pressed(KeyCode::Space) {
+        predator.speed = predator::PREDATOR_SPEED * predator::PREDATOR_BOOST_MODIFIER;
+    } else {
+        predator.speed = predator::PREDATOR_SPEED
     }
 }
 
